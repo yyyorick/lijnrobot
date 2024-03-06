@@ -21,5 +21,4 @@ void readSensor(bool sensorValues[]){
             sensorValues[i] = false;
         }
     }
-    return sensorValues;
 }
