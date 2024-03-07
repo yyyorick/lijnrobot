@@ -16,9 +16,9 @@ void loop() {
 void readSensor(bool sensorValues[]){
     for(int i = 0; i < 5; i++){
         if (analogRead(i) > 500){
-            sensorValues[i] = true;
-        } else {
             sensorValues[i] = false;
+        } else {
+            sensorValues[i] = true;
         }
     }
 }
