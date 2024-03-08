@@ -7,7 +7,7 @@ bool straightPath[] = {false, false, true, false, false};
 bool leftTurn[] = {true, true, true, false, false};
 bool rightTurn[] = {false, false, true, true, true};
 bool crossing[] = {true, true, true, true, true};
-//bool offRoad[] = {false, false, false, false, false}; might be redundant?
+bool offRoad[] = {false, false, false, false, false};
 
 //Motors
 int pwmSpeed = 75;
@@ -79,11 +79,11 @@ void translateSensor()
     {
         SetRobotState(crossingDetected);
     }
-    // else
-    // {
-        //fullStop();
-        //SetRobotState(stopped);
-    //}
+    else if(isBoolArrayEqual(sensorValues, offRoad, 5, 5))
+    {
+        fullStop();
+        SetRobotState(stopped);
+    }
 
 }
 
@@ -116,7 +116,7 @@ void driveForward(){
     digitalWrite(pwmSpeedPinB, HIGH);
 }
 
-void turn(bool left) {
+void turn(bool left) { //This function needs to turn the robot 90 degrees
     if(left) {
         // Draai naar links
         digitalWrite(directionPinA, LOW);  
@@ -150,19 +150,40 @@ void Navigate()
             break;
         case forward:
             Serial.println("I am going forward!");
+            if(WallDetected(followLeft))
+            {
+                driveForward();
+            }
+            else
+            {
+                fullStop();
+            }
             break;
         case leftDetected:
             Serial.println("Left turn detected!");
+            if(!WallDetected(followLeft) && WallDetected(!followLeft)) //If there is a wall to the right but not the left, turn left.
+                {
+                    fullStop();
+                    turn(followLeft);
+                }
             break;
         case rightDetected:
             Serial.println("Right turn detected!");
+            if(WallDetected(followLeft) && !WallDetected(!followLeft)) //If there is a wall to the left but not the right, turn right.
+                {
+                    fullStop();
+                    turn(!followLeft);
+                }
             break;
         case crossingDetected:
             Serial.println("Crossing (Or endpoint) detected!");
+            fullStop();
+            turn(followLeft);
             break;
         case stopped:
             Serial.println("I have stopped!");
-            //Probably need to turn around?
+            turn(followLeft);
+            turn(followLeft); //Call turn twice to rotate 180 degrees
             break;
         default:
             Serial.println("De robot is stukkie wukkie :3");
@@ -180,6 +201,26 @@ void Navigate()
 void SetRobotState(robotStatus newState)
 {
     currentStatus = newState;
+}
+
+bool WallDetected(bool left)
+{
+    if(left)
+    {
+        if(!sensorValues[0] && !sensorValues[1]) //Linesensor OUT1 and OUT2 return false (White)
+        {
+            return true;
+        }
+    }
+    else
+    { 
+        if(!sensorValues[3] && !sensorValues[4]) //Linesensor OUT4 and OUT5 return false (White)
+        {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 //---Helper functions---
