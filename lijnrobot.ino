@@ -5,17 +5,41 @@ int sensorPins[] = {5, A2, A3, A4, A5};
 
 bool straightPath[] = {false, false, true, false, false};
 bool leftTurn[] = {true, true, true, false, false};
+bool turningLeftA[] = {false, true, true, false, false};
+bool turningLeftB[] = {true, true, true, true, false};
 bool rightTurn[] = {false, false, true, true, true};
+bool turningRightA[] = {false, false, true, true, true};
+bool turningRightB[] = {false, true, true, true, true};
 bool crossing[] = {true, true, true, true, true};
 bool offRoad[] = {false, false, false, false, false};
 
+bool onStraight()
+{
+    return isBoolArrayEqual(sensorValues, straightPath, 5, 5);
+}
+bool onLeft()
+{
+    return isBoolArrayEqual(sensorValues, leftTurn, 5, 5);
+}
+bool onRight()
+{
+    return isBoolArrayEqual(sensorValues, rightTurn, 5, 5);
+}
+bool onCross()
+{
+    return isBoolArrayEqual(sensorValues, crossing, 5, 5);
+}
+bool onWhite()
+{
+    return isBoolArrayEqual(sensorValues, offRoad, 5, 5);
+}
 //Motors
-int pwmSpeed = 75;
-//A
+int pwmSpeed = 75; //75 appears to be minimum?
+//A - RIGHT
 int directionPinA = 12;
 int pwmSpeedPinA = 3;
 int brakePinA = 9;
-//B
+//B - LEFT
 int directionPinB = 13;
 int pwmSpeedPinB = 11;
 int brakePinB = 8;
@@ -24,9 +48,12 @@ bool directionState;
 #define TCCR2B & B11111000 | B0000111; // for PWM frequency of 30.64 Hz
 
 //Navigation algorithm
+bool solving = true;
 enum robotStatus {idle, forward, leftDetected, rightDetected, crossingDetected, stopped, obstacleDetected};
 robotStatus currentStatus = idle;
 bool followLeft = true;
+bool turning = false;
+//long modeLockout;
  
 //---Runtime logic---
 void setup() {
@@ -45,11 +72,18 @@ void setup() {
     
 }
 void loop() {
-   debugSensorOutput();
-   translateSensor();
-   Navigate();
+//    if((millis() - modeLockout) >= 2000)
+//    {
+        //translateSensor();
+//    }
 
-    delay(1000);
+    if(solving)
+    {
+        debugSensorOutput();
+        translateSensor();
+        Navigate();
+    }
+   
 
 }
 
@@ -63,25 +97,28 @@ void readSensor(){
 
 void translateSensor()
 {
-    if(isBoolArrayEqual(sensorValues, straightPath, 5, 5))
+    //modeLockout = millis();
+    if(onStraight && currentStatus != forward && !turning)
     {
         SetRobotState(forward);
     }
-    else if(isBoolArrayEqual(sensorValues, leftTurn, 5, 5))
+    else if(onLeft() && currentStatus != leftDetected && !turning)
     {
         SetRobotState(leftDetected);
+        turning = true;
     }
-    else if(isBoolArrayEqual(sensorValues, rightTurn, 5, 5))
+    else if(onRight() && currentStatus != rightDetected && !turning)
     {
         SetRobotState(rightDetected);
+        //turning = true;
     }
-    else if(isBoolArrayEqual(sensorValues, crossing, 5, 5))
+    else if(onCross() && currentStatus != crossingDetected && !turning)
     {
         SetRobotState(crossingDetected);
+        turning = true;
     }
-    else if(isBoolArrayEqual(sensorValues, offRoad, 5, 5))
+    else if(onWhite() && currentStatus != stopped)
     {
-        fullStop();
         SetRobotState(stopped);
     }
 
@@ -101,40 +138,69 @@ void debugSensorOutput()
 //Movement
 void fullStop()
 {
-    digitalWrite(pwmSpeedPinA, LOW);
-    digitalWrite(pwmSpeedPinB, LOW);
+    digitalWrite(pwmSpeedPinA, 0);
+    digitalWrite(pwmSpeedPinB, 0);
 
     digitalWrite(brakePinA, HIGH);
     digitalWrite(brakePinB, HIGH);
 
+    turning = false;
+
 }
 void driveForward(){
     //Vroem
-    digitalWrite(directionPinA, HIGH);
-    digitalWrite(pwmSpeedPinA, HIGH);
+    digitalWrite(brakePinA, LOW);
+    digitalWrite(brakePinB, LOW);
+
+    digitalWrite(directionPinA, LOW); //todo: figure out what the directionpin actually does, robot seems to turn right at random while going straight.
+    analogWrite(pwmSpeedPinA, pwmSpeed);
     
-    digitalWrite(pwmSpeedPinB, HIGH);
+    digitalWrite(directionPinB, HIGH);
+    analogWrite(pwmSpeedPinB, pwmSpeed);
+
+   
+}
+
+void driveBackward()
+{
+    digitalWrite(brakePinA, LOW);
+    digitalWrite(brakePinB, LOW);
+
+    digitalWrite(directionPinA, HIGH);
+    analogWrite(pwmSpeedPinA, pwmSpeed);
+    
+    digitalWrite(directionPinB, LOW);
+    analogWrite(pwmSpeedPinB, pwmSpeed);
 }
 
 void turn(bool left) { //This function needs to turn the robot 90 degrees
+    turning = true;
     if(left) {
         // Draai naar links
+        //digitalWrite(brakePinB, HIGH);     
+        //digitalWrite(brakePinA, HIGH);     
+
         digitalWrite(directionPinA, LOW);  
-        digitalWrite(brakePinA, LOW);     
-        analogWrite(pwmSpeedPinA, 75);    
+        analogWrite(pwmSpeedPinA, pwmSpeed);   
 
-        digitalWrite(directionPinB, HIGH); 
-        digitalWrite(brakePinB, LOW);       
-        analogWrite(pwmSpeedPinB, 75);     
+        //digitalWrite(directionPinB, LOW);  
+        analogWrite(pwmSpeedPinB, 0);      
+
+        if(onStraight() && currentStatus != forward)
+        {
+            SetRobotState(forward);
+        }
+
+
     } else {
-        // Draai naar rechts
-        digitalWrite(directionPinA, HIGH);  
-        digitalWrite(brakePinA, LOW);       
-        analogWrite(pwmSpeedPinA, 75);     
+        // // Draai naar rechts
+        // digitalWrite(directionPinA, LOW);  
+        // digitalWrite(brakePinA, LOW);       
+        // analogWrite(pwmSpeedPinA, pwmSpeed);     
 
-        digitalWrite(directionPinB, LOW);   
-        digitalWrite(brakePinB, LOW);       
-        analogWrite(pwmSpeedPinB, 75);     
+        // digitalWrite(directionPinB, LOW);   
+        // digitalWrite(brakePinB, LOW);       
+        // analogWrite(pwmSpeedPinB, pwmSpeed);     
     }
 }
 
@@ -150,7 +216,7 @@ void Navigate()
             break;
         case forward:
             Serial.println("I am going forward!");
-            if(WallDetected(followLeft))
+            if(WallDetected(followLeft) )
             {
                 driveForward();
             }
@@ -161,29 +227,40 @@ void Navigate()
             break;
         case leftDetected:
             Serial.println("Left turn detected!");
-            if(!WallDetected(followLeft) && WallDetected(!followLeft)) //If there is a wall to the right but not the left, turn left.
-                {
-                    fullStop();
-                    turn(followLeft);
-                }
+                turn(true);
             break;
         case rightDetected:
             Serial.println("Right turn detected!");
-            if(WallDetected(followLeft) && !WallDetected(!followLeft)) //If there is a wall to the left but not the right, turn right.
-                {
-                    fullStop();
-                    turn(!followLeft);
-                }
+            // if(WallDetected(followLeft) && !WallDetected(!followLeft)) //If there is a wall to the left but not the right, turn right.
+            //     {
+            //         fullStop();
+            //         turn(!followLeft);
+            //     }
             break;
         case crossingDetected:
             Serial.println("Crossing (Or endpoint) detected!");
-            fullStop();
             turn(followLeft);
             break;
         case stopped:
             Serial.println("I have stopped!");
-            turn(followLeft);
-            turn(followLeft); //Call turn twice to rotate 180 degrees
+            // turn(followLeft);
+            // turn(followLeft); //Call turn twice to rotate 180 degrees
+            driveBackward();
+            delay(25); //busywait might not be allowed but works for now
+            fullStop();
+            if(onCross())
+            {
+                //Either at crossing or endpoint
+                //if crossing > turn in followdir
+                //else > stop SolveMaze(); and go idle
+
+                SolveMaze(); //temp
+            }
+            else if(onStraight())
+            {
+                //Dead end, turn around
+                SolveMaze(); //temp
+            }
             break;
         default:
             Serial.println("De robot is stukkie wukkie :3");
@@ -200,6 +277,7 @@ void Navigate()
 
 void SetRobotState(robotStatus newState)
 {
+    fullStop();
     currentStatus = newState;
 }
 
@@ -221,6 +299,12 @@ bool WallDetected(bool left)
     }
 
     return false;
+}
+
+void SolveMaze() //Call this when at the endpoint to stop the robot
+{
+    SetRobotState(idle);
+    solving = false;
 }
 
 //---Helper functions---
