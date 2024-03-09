@@ -13,26 +13,7 @@ bool turningRightB[] = {false, true, true, true, true};
 bool crossing[] = {true, true, true, true, true};
 bool offRoad[] = {false, false, false, false, false};
 
-bool onStraight()
-{
-    return isBoolArrayEqual(sensorValues, straightPath, 5, 5);
-}
-bool onLeft()
-{
-    return isBoolArrayEqual(sensorValues, leftTurn, 5, 5);
-}
-bool onRight()
-{
-    return isBoolArrayEqual(sensorValues, rightTurn, 5, 5);
-}
-bool onCross()
-{
-    return isBoolArrayEqual(sensorValues, crossing, 5, 5);
-}
-bool onWhite()
-{
-    return isBoolArrayEqual(sensorValues, offRoad, 5, 5);
-}
+
 //Motors
 int pwmSpeed = 75; //75 appears to be minimum?
 //A - RIGHT
@@ -55,6 +36,29 @@ bool followLeft = true;
 bool turning = false;
 //long modeLockout;
  
+
+bool onStraight()
+{
+    return isBoolArrayEqual(sensorValues, straightPath, 5, 5);
+}
+bool onLeft()
+{
+    return isBoolArrayEqual(sensorValues, leftTurn, 5, 5);
+}
+bool onRight()
+{
+    return isBoolArrayEqual(sensorValues, rightTurn, 5, 5);
+}
+bool onCross()
+{
+    return isBoolArrayEqual(sensorValues, crossing, 5, 5);
+}
+bool onWhite()
+{
+    return isBoolArrayEqual(sensorValues, offRoad, 5, 5);
+}
+
+
 //---Runtime logic---
 void setup() {
     Serial.begin(9600);
