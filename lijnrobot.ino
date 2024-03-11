@@ -1,7 +1,7 @@
 //---Variable definitions---
 //Linesensor
 bool sensorValues[] = {false, false, false, false, false};
-int sensorPins[] = {5, A2, A3, A4, A5};
+const int sensorPins[] = {5, A2, A3, A4, A5};
 
 bool straightPath[] = {false, false, true, false, false};
 bool leftTurn[] = {true, true, true, false, false};
@@ -15,18 +15,16 @@ bool offRoad[] = {false, false, false, false, false};
 
 
 //Motors
-int pwmSpeed = 75; //75 appears to be minimum?
+int pwmSpeed = 46; //75 appears to be minimum? Kinda need it to be slower though
 //A - RIGHT
-int directionPinA = 12;
-int pwmSpeedPinA = 3;
-int brakePinA = 9;
+const int directionPinA = 12;
+const int pwmSpeedPinA = 3;
+const int brakePinA = 9;
 //B - LEFT
-int directionPinB = 13;
-int pwmSpeedPinB = 11;
-int brakePinB = 8;
+const int directionPinB = 13;
+const int pwmSpeedPinB = 11;
+const int brakePinB = 8;
 bool directionState;
-
-#define TCCR2B & B11111000 | B0000111; // for PWM frequency of 30.64 Hz
 
 //Navigation algorithm
 bool solving = true;
@@ -34,6 +32,7 @@ enum robotStatus {idle, forward, leftDetected, rightDetected, crossingDetected, 
 robotStatus currentStatus = idle;
 bool followLeft = true;
 bool turning = false;
+bool reversing = false;
 //long modeLockout;
  
 
@@ -60,13 +59,15 @@ bool onWhite()
 
 
 //---Runtime logic---
-void setup() {
+void setup() 
+{
+    TCCR2B = TCCR2B & B11111000 | B00000110; // for PWM frequency of 122.55 Hz
     Serial.begin(9600);
     pinMode(5, INPUT);
 
 
-//define motor pins
-    pinMode(directionPinA, OUTPUT);
+    //define motor pins
+    pinMode(directionPinA, OUTPUT); //Might want to put these in an array and just loop to do this
     pinMode(pwmSpeedPinA, OUTPUT);
     pinMode(brakePinA, OUTPUT);
 
@@ -106,22 +107,22 @@ void translateSensor()
     {
         SetRobotState(forward);
     }
-    else if(onLeft() && currentStatus != leftDetected && !turning)
+     if(!onCross() && onLeft() && currentStatus != leftDetected && !turning)
     {
         SetRobotState(leftDetected);
         turning = true;
     }
-    else if(onRight() && currentStatus != rightDetected && !turning)
+    if(!onCross() && onRight() && currentStatus != rightDetected && !turning)
     {
         SetRobotState(rightDetected);
-        //turning = true;
+        turning = true;
     }
-    else if(onCross() && currentStatus != crossingDetected && !turning)
+    if(onCross() && currentStatus != crossingDetected && !turning)
     {
         SetRobotState(crossingDetected);
         turning = true;
     }
-    else if(onWhite() && currentStatus != stopped)
+    if(onWhite() && currentStatus != stopped && !turning)
     {
         SetRobotState(stopped);
     }
@@ -177,9 +178,11 @@ void driveBackward()
     analogWrite(pwmSpeedPinB, pwmSpeed);
 }
 
-void turn(bool left) { //This function needs to turn the robot 90 degrees
+void turn(bool left) 
+{ //This function needs to turn the robot 90 degrees
     turning = true;
-    if(left) {
+    if(left) 
+    {
         // Draai naar links
         //digitalWrite(brakePinB, HIGH);     
         //digitalWrite(brakePinA, HIGH);     
@@ -188,23 +191,26 @@ void turn(bool left) { //This function needs to turn the robot 90 degrees
         analogWrite(pwmSpeedPinA, pwmSpeed);   
 
         //digitalWrite(directionPinB, LOW);  
-        analogWrite(pwmSpeedPinB, 0);      
+        analogWrite(pwmSpeedPinB, 0);
+
+        if(onStraight() && currentStatus != forward) //Currently the sensors can see a diagonal during a turn as a straight path, causing the robot to go off-center (11-03-24 14:45)
+        {
+            SetRobotState(forward);
+        }
+    } 
+    else 
+    {
+        // // Draai naar rechts
+        digitalWrite(directionPinB, HIGH);  
+        analogWrite(pwmSpeedPinB, pwmSpeed);   
+
+        //digitalWrite(directionPinB, LOW);  
+        analogWrite(pwmSpeedPinA, 0);      
 
         if(onStraight() && currentStatus != forward)
         {
             SetRobotState(forward);
         }
-
-
-    } else {
-        // // Draai naar rechts
-        // digitalWrite(directionPinA, LOW);  
-        // digitalWrite(brakePinA, LOW);       
-        // analogWrite(pwmSpeedPinA, pwmSpeed);     
-
-        // digitalWrite(directionPinB, LOW);   
-        // digitalWrite(brakePinB, LOW);       
-        // analogWrite(pwmSpeedPinB, pwmSpeed);     
     }
 }
 
@@ -219,14 +225,15 @@ void Navigate()
             Serial.println("I am idle!");
             break;
         case forward:
-            Serial.println("I am going forward!");
-            if(WallDetected(followLeft) )
+            if(!reversing)
             {
+                Serial.println("I am going forward!");
                 driveForward();
             }
             else
             {
-                fullStop();
+                Serial.println("I am reversing!");
+                driveBackward();
             }
             break;
         case leftDetected:
@@ -235,11 +242,7 @@ void Navigate()
             break;
         case rightDetected:
             Serial.println("Right turn detected!");
-            // if(WallDetected(followLeft) && !WallDetected(!followLeft)) //If there is a wall to the left but not the right, turn right.
-            //     {
-            //         fullStop();
-            //         turn(!followLeft);
-            //     }
+                turn(false);
             break;
         case crossingDetected:
             Serial.println("Crossing (Or endpoint) detected!");
@@ -247,23 +250,23 @@ void Navigate()
             break;
         case stopped:
             Serial.println("I have stopped!");
-            // turn(followLeft);
-            // turn(followLeft); //Call turn twice to rotate 180 degrees
-            driveBackward();
-            delay(25); //busywait might not be allowed but works for now
             fullStop();
+            // reversing = true;
+            // driveBackward();
+            //delay(45); //busywait might not be allowed but works for now
+            //fullStop();
             if(onCross())
             {
                 //Either at crossing or endpoint
                 //if crossing > turn in followdir
                 //else > stop SolveMaze(); and go idle
 
-                SolveMaze(); //temp
+                //SolveMaze(); //temp
             }
             else if(onStraight())
             {
                 //Dead end, turn around
-                SolveMaze(); //temp
+                //SolveMaze(); //temp
             }
             break;
         default:
