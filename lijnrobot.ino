@@ -5,13 +5,12 @@ const int sensorPins[] = {5, A2, A3, A4, A5};
 
 const bool straightPath[] = {false, false, true, false, false};
 const bool leftTurn[] = {true, true, true, false, false};
-const bool turningLeftA[] = {false, true, true, false, false};
-const bool turningLeftB[] = {true, true, true, true, false};
 const bool rightTurn[] = {false, false, true, true, true};
-const bool turningRightA[] = {false, false, true, true, true};
-const bool turningRightB[] = {false, true, true, true, true};
 const bool crossing[] = {true, true, true, true, true};
 const bool offRoad[] = {false, false, false, false, false};
+
+const bool veeringLeft[] = {false, true, true, false, false};
+const bool veeringRight[] = {false, false, true, true, false};
 
 
 //Motors
@@ -177,7 +176,22 @@ void ReworkedNavigate()
         Serial.println("zzzzzz");
         break;
     case forward:
-        driveForward();
+        if(isBoolArrayEqual(sensorValues, veeringLeft, 5, 5))
+        {
+            fullStop();
+            turning = true;
+            turnRight();
+        }
+        else if(isBoolArrayEqual(sensorValues, veeringRight, 5, 5))
+        {
+            fullStop();
+            turning = true;
+            turnRight();
+        }
+        else
+        {
+            driveForward();
+        }
         Serial.println("FW");
         break;
     case leftDetected:
@@ -389,7 +403,9 @@ void turnRight()
     {
         digitalWrite(directionPinB, HIGH);  
         analogWrite(pwmSpeedPinB, pwmSpeed);   
-        analogWrite(pwmSpeedPinA, 0);    
+
+        digitalWrite(directionPinA, HIGH);
+        analogWrite(pwmSpeedPinA, pwmSpeed * pwmCorrectionMod);    
         debugSensorOutput();
         if(isBoolArrayEqual(sensorValues, straightPath, 5, 5))
         {
@@ -404,8 +420,10 @@ void turnLeft()
     while(turning)
     {
         digitalWrite(directionPinA, LOW);  
-        analogWrite(pwmSpeedPinA, pwmSpeed * pwmCorrectionMod);   
-        analogWrite(pwmSpeedPinB, 0);
+        analogWrite(pwmSpeedPinA, pwmSpeed * pwmCorrectionMod);
+
+        analogWrite(pwmSpeedPinB, pwmSpeed);
+        digitalWrite(directionPinB, LOW);
         debugSensorOutput();
         if(isBoolArrayEqual(sensorValues, straightPath, 5, 5))
         {
