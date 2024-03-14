@@ -3,19 +3,20 @@
 bool sensorValues[] = {false, false, false, false, false};
 const int sensorPins[] = {5, A2, A3, A4, A5};
 
-bool straightPath[] = {false, false, true, false, false};
-bool leftTurn[] = {true, true, true, false, false};
-bool turningLeftA[] = {false, true, true, false, false};
-bool turningLeftB[] = {true, true, true, true, false};
-bool rightTurn[] = {false, false, true, true, true};
-bool turningRightA[] = {false, false, true, true, true};
-bool turningRightB[] = {false, true, true, true, true};
-bool crossing[] = {true, true, true, true, true};
-bool offRoad[] = {false, false, false, false, false};
+const bool straightPath[] = {false, false, true, false, false};
+const bool leftTurn[] = {true, true, true, false, false};
+const bool turningLeftA[] = {false, true, true, false, false};
+const bool turningLeftB[] = {true, true, true, true, false};
+const bool rightTurn[] = {false, false, true, true, true};
+const bool turningRightA[] = {false, false, true, true, true};
+const bool turningRightB[] = {false, true, true, true, true};
+const bool crossing[] = {true, true, true, true, true};
+const bool offRoad[] = {false, false, false, false, false};
 
 
 //Motors
-int pwmSpeed = 46; //75 appears to be minimum? Kinda need it to be slower though
+int pwmSpeed = 46; //75 appears to be minimum? Kinda need it to be slower though (46 causes steering bugs?)
+const float pwmCorrectionMod = 1.15;
 //A - RIGHT
 const int directionPinA = 12;
 const int pwmSpeedPinA = 3;
@@ -81,15 +82,14 @@ void loop() {
 //    {
         //translateSensor();
 //    }
-
     if(solving)
     {
         debugSensorOutput();
-        translateSensor();
+        //translateSensor();
+        
+        ReworkedTranslateSensor();
         Navigate();
     }
-   
-
 }
 
 //---Function definitions---
@@ -100,29 +100,61 @@ void readSensor(){
     }
 }
 
-void translateSensor()
+void translateSensor() //Translate SensorValues array to Robot 
 {
     //modeLockout = millis();
     if(onStraight && currentStatus != forward && !turning)
     {
         SetRobotState(forward);
     }
-     if(!onCross() && onLeft() && currentStatus != leftDetected && !turning)
+    if(!onCross())
     {
-        SetRobotState(leftDetected);
-        turning = true;
+            if(onLeft() && currentStatus != leftDetected && !turning)
+            {
+                SetRobotState(leftDetected);
+                turning = true;
+            }
+            else if(onRight() && currentStatus != rightDetected && !turning)
+            {
+                SetRobotState(rightDetected);
+                turning = true;
+            }
     }
-    if(!onCross() && onRight() && currentStatus != rightDetected && !turning)
+    else
     {
-        SetRobotState(rightDetected);
-        turning = true;
+            if(currentStatus != crossingDetected && !turning)
+            {
+                SetRobotState(crossingDetected);
+                turning = true;
+            }
     }
-    if(onCross() && currentStatus != crossingDetected && !turning)
+    
+    if(onWhite() && currentStatus != stopped && !turning)
+    {
+        SetRobotState(stopped);
+    }
+
+}
+
+void ReworkedTranslateSensor() //Just making it again to see if I can do anything differently
+{
+    if(onStraight && currentStatus != forward)
+    {
+        SetRobotState(forward);
+    }
+    else if(onCross && currentStatus != crossingDetected)
     {
         SetRobotState(crossingDetected);
-        turning = true;
     }
-    if(onWhite() && currentStatus != stopped && !turning)
+    else if(onLeft && currentStatus != leftDetected)
+    {
+        SetRobotState(leftDetected);
+    }
+    else if(onRight && currentStatus != rightDetected)
+    {
+        SetRobotState(rightDetected);
+    }
+    else if(onWhite && currentStatus != stopped)
     {
         SetRobotState(stopped);
     }
@@ -158,7 +190,7 @@ void driveForward(){
     digitalWrite(brakePinB, LOW);
 
     digitalWrite(directionPinA, LOW); //todo: figure out what the directionpin actually does, robot seems to turn right at random while going straight.
-    analogWrite(pwmSpeedPinA, pwmSpeed);
+    analogWrite(pwmSpeedPinA, pwmSpeed * pwmCorrectionMod);
     
     digitalWrite(directionPinB, HIGH);
     analogWrite(pwmSpeedPinB, pwmSpeed);
@@ -172,10 +204,22 @@ void driveBackward()
     digitalWrite(brakePinB, LOW);
 
     digitalWrite(directionPinA, HIGH);
-    analogWrite(pwmSpeedPinA, pwmSpeed);
+    analogWrite(pwmSpeedPinA, 10 * pwmCorrectionMod);
     
     digitalWrite(directionPinB, LOW);
+    analogWrite(pwmSpeedPinB, 10);
+}
+void turnAround(){
+    
+    digitalWrite(brakePinA, LOW);
+    digitalWrite(brakePinB, LOW);
+
+    digitalWrite(directionPinA, HIGH);
+    analogWrite(pwmSpeedPinA, pwmSpeed * pwmCorrectionMod);
+    
+    digitalWrite(directionPinB, HIGH);
     analogWrite(pwmSpeedPinB, pwmSpeed);
+    delay(1000);
 }
 
 void turn(bool left) 
@@ -188,7 +232,7 @@ void turn(bool left)
         //digitalWrite(brakePinA, HIGH);     
 
         digitalWrite(directionPinA, LOW);  
-        analogWrite(pwmSpeedPinA, pwmSpeed);   
+        analogWrite(pwmSpeedPinA, pwmSpeed * pwmCorrectionMod);   
 
         //digitalWrite(directionPinB, LOW);  
         analogWrite(pwmSpeedPinB, 0);
@@ -267,7 +311,11 @@ void Navigate()
             {
                 //Dead end, turn around
                 //SolveMaze(); //temp
+            } else if (onWhite())
+            {
+                turnAround();
             }
+            
             break;
         default:
             Serial.println("De robot is stukkie wukkie :3");
@@ -284,7 +332,7 @@ void Navigate()
 
 void SetRobotState(robotStatus newState)
 {
-    fullStop();
+    //fullStop();
     currentStatus = newState;
 }
 
@@ -331,5 +379,9 @@ bool isBoolArrayEqual(bool* a1, bool* a2, int a1Count, int a2Count)
    }
    
    return true; //Arrays are the same.
+    
+}
+
+void begin() {
     
 }
