@@ -35,28 +35,8 @@ bool followLeft = true;
 bool turning = false;
 bool reversing = false;
 //long modeLockout;
- 
 
-bool onStraight()
-{
-    return isBoolArrayEqual(sensorValues, straightPath, 5, 5);
-}
-bool onLeft()
-{
-    return isBoolArrayEqual(sensorValues, leftTurn, 5, 5);
-}
-bool onRight()
-{
-    return isBoolArrayEqual(sensorValues, rightTurn, 5, 5);
-}
-bool onCross()
-{
-    return isBoolArrayEqual(sensorValues, crossing, 5, 5);
-}
-bool onWhite()
-{
-    return isBoolArrayEqual(sensorValues, offRoad, 5, 5);
-}
+String lastSensorDebug = "";
 
 
 //---Runtime logic---
@@ -78,28 +58,44 @@ void setup()
     
 }
 void loop() {
-//    if((millis() - modeLockout) >= 2000)
-//    {
-        //translateSensor();
-//    }
+    switch (currentStatus)
+    {
+    case idle:
+        Serial.println("STATUS: IDLE");
+        break;
+    default:
+        break;
+    }
     if(solving)
     {
         debugSensorOutput();
         //translateSensor();
-        
         ReworkedTranslateSensor();
-        Navigate();
+        ReworkedNavigate();
+        //Navigate();
     }
 }
 
 //---Function definitions---
+
+
+
+
+
+
+
+
+
+
+
+
 //Sensors
 void readSensor(){
     for(int i = 0; i < 5; i++){
         sensorValues[i] = !digitalRead(sensorPins[i]);
     }
 }
-
+/*
 void translateSensor() //Translate SensorValues array to Robot 
 {
     //modeLockout = millis();
@@ -135,41 +131,81 @@ void translateSensor() //Translate SensorValues array to Robot
     }
 
 }
-
+*/
 void ReworkedTranslateSensor() //Just making it again to see if I can do anything differently
 {
-    if(onStraight && currentStatus != forward)
+    if(isBoolArrayEqual(sensorValues, straightPath, 5, 5) && !turning)
     {
         SetRobotState(forward);
-    }
-    else if(onCross && currentStatus != crossingDetected)
-    {
-        SetRobotState(crossingDetected);
-    }
-    else if(onLeft && currentStatus != leftDetected)
+    } 
+    else if(isBoolArrayEqual(sensorValues, leftTurn, 5, 5) && !turning)
     {
         SetRobotState(leftDetected);
-    }
-    else if(onRight && currentStatus != rightDetected)
+        turning = true;
+    } 
+    else if(isBoolArrayEqual(sensorValues, rightTurn, 5, 5) && !turning)
     {
         SetRobotState(rightDetected);
+        turning = true;
     }
-    else if(onWhite && currentStatus != stopped)
+    else if(isBoolArrayEqual(sensorValues, offRoad, 5, 5) && !turning)
     {
         SetRobotState(stopped);
+        //fullStop();
+        //Serial.println("Stop");
     }
+    else if(isBoolArrayEqual(sensorValues, crossing, 5, 5) && !turning)
+    {
+        // if(followLeft)
+        // {
+        //     turnLeft();
+        // }
+        // else
+        // {
+        //     turnRight();
+        // }
+        fullStop();
+        Serial.println("TESTSTOP");
+    }
+}
 
+void ReworkedNavigate()
+{
+    switch (currentStatus)
+    {
+    case idle:
+        Serial.println("zzzzzz");
+        break;
+    case forward:
+        driveForward();
+        Serial.println("FW");
+        break;
+    case leftDetected:
+        turnLeft();
+        Serial.println("LT");
+        break;
+    case rightDetected:
+        turnRight();
+        Serial.println("RT");
+        break;
+    case stopped:
+        turnAround();
+        Serial.println("STOPPED");
+        break;
+    default:
+        Serial.println("De robot is stukkie wukkie :3");
+        break;
+    }
 }
 
 void debugSensorOutput()
 {
     readSensor();
-    for (int i = 0; i < 5; i++) {
-        Serial.print(sensorValues[i]);
-    }
-    Serial.println();
-    // turn(true);
-    // delay(1000); temporary code, disabled to test robot states
+    // for (int i = 0; i < 5; i++) {
+    //     Serial.print(sensorValues[i]);
+    
+    // }
+    // Serial.println();
 }
 
 //Movement
@@ -182,7 +218,6 @@ void fullStop()
     digitalWrite(brakePinB, HIGH);
 
     turning = false;
-
 }
 void driveForward(){
     //Vroem
@@ -204,10 +239,10 @@ void driveBackward()
     digitalWrite(brakePinB, LOW);
 
     digitalWrite(directionPinA, HIGH);
-    analogWrite(pwmSpeedPinA, 10 * pwmCorrectionMod);
+    analogWrite(pwmSpeedPinA, pwmSpeed * pwmCorrectionMod);
     
     digitalWrite(directionPinB, LOW);
-    analogWrite(pwmSpeedPinB, 10);
+    analogWrite(pwmSpeedPinB, pwmSpeed);
 }
 void turnAround(){
     
@@ -222,43 +257,8 @@ void turnAround(){
     delay(1000);
 }
 
-void turn(bool left) 
-{ //This function needs to turn the robot 90 degrees
-    turning = true;
-    if(left) 
-    {
-        // Draai naar links
-        //digitalWrite(brakePinB, HIGH);     
-        //digitalWrite(brakePinA, HIGH);     
-
-        digitalWrite(directionPinA, LOW);  
-        analogWrite(pwmSpeedPinA, pwmSpeed * pwmCorrectionMod);   
-
-        //digitalWrite(directionPinB, LOW);  
-        analogWrite(pwmSpeedPinB, 0);
-
-        if(onStraight() && currentStatus != forward) //Currently the sensors can see a diagonal during a turn as a straight path, causing the robot to go off-center (11-03-24 14:45)
-        {
-            SetRobotState(forward);
-        }
-    } 
-    else 
-    {
-        // // Draai naar rechts
-        digitalWrite(directionPinB, HIGH);  
-        analogWrite(pwmSpeedPinB, pwmSpeed);   
-
-        //digitalWrite(directionPinB, LOW);  
-        analogWrite(pwmSpeedPinA, 0);      
-
-        if(onStraight() && currentStatus != forward)
-        {
-            SetRobotState(forward);
-        }
-    }
-}
-
 //Navigation
+/*
 void Navigate()
 {
     if(currentStatus != obstacleDetected)
@@ -307,11 +307,12 @@ void Navigate()
 
                 //SolveMaze(); //temp
             }
-            else if(onStraight())
+            else if(isBoolArrayEqual(sensorValues, straightPath, 5, 5))
             {
                 //Dead end, turn around
                 //SolveMaze(); //temp
-            } else if (onWhite())
+            } 
+            else if (isBoolArrayEqual(sensorValues, offRoad, 5, 5))
             {
                 turnAround();
             }
@@ -329,7 +330,7 @@ void Navigate()
     }
         
 }
-
+*/
 void SetRobotState(robotStatus newState)
 {
     //fullStop();
@@ -382,6 +383,38 @@ bool isBoolArrayEqual(bool* a1, bool* a2, int a1Count, int a2Count)
     
 }
 
+void turnRight()
+{
+    while(turning)
+    {
+        digitalWrite(directionPinB, HIGH);  
+        analogWrite(pwmSpeedPinB, pwmSpeed);   
+        analogWrite(pwmSpeedPinA, 0);    
+        debugSensorOutput();
+        if(isBoolArrayEqual(sensorValues, straightPath, 5, 5))
+        {
+            turning = false;
+        }
+    }
+
+}
+
+void turnLeft()
+{
+    while(turning)
+    {
+        digitalWrite(directionPinA, LOW);  
+        analogWrite(pwmSpeedPinA, pwmSpeed * pwmCorrectionMod);   
+        analogWrite(pwmSpeedPinB, 0);
+        debugSensorOutput();
+        if(isBoolArrayEqual(sensorValues, straightPath, 5, 5))
+        {
+            turning = false;
+            break;
+        }
+    }
+}
+ 
 void begin() {
     
 }
