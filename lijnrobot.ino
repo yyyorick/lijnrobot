@@ -5,416 +5,584 @@ const int sensorPins[] = {5, A2, A3, A4, A5};
 
 const bool straightPath[] = {false, false, true, false, false};
 const bool leftTurn[] = {true, true, true, false, false};
-const bool turningLeftA[] = {false, true, true, false, false};
-const bool turningLeftB[] = {true, true, true, true, false};
 const bool rightTurn[] = {false, false, true, true, true};
-const bool turningRightA[] = {false, false, true, true, true};
-const bool turningRightB[] = {false, true, true, true, true};
 const bool crossing[] = {true, true, true, true, true};
-const bool offRoad[] = {false, false, false, false, false};
+const bool white[] = {false, false, false, false, false};
 
 
 //Motors
-int pwmSpeed = 46; //75 appears to be minimum? Kinda need it to be slower though (46 causes steering bugs?)
-const float pwmCorrectionMod = 1.15;
+int pwmSpeedA = 50; //75 appears to be minimum? Kinda need it to be slower though (46 causes steering bugs?)
+int pwmSpeedB = 50; //Dev value: 50
+// const float pwmCorrectionMod = 1.15; // niet meer nodig denk ik
 //A - RIGHT
 const int directionPinA = 12;
 const int pwmSpeedPinA = 3;
-const int brakePinA = 9;
 //B - LEFT
 const int directionPinB = 13;
 const int pwmSpeedPinB = 11;
-const int brakePinB = 8;
+//A+B
+const int mainDrivePwmTurnSpeed = 70; //60
+const int subDrivePwmTurnSpeed = 20; //20
 bool directionState;
 
 //Navigation algorithm
 bool solving = true;
-enum robotStatus {idle, forward, leftDetected, rightDetected, crossingDetected, stopped, obstacleDetected};
+enum robotStatus {idle, forward, leftDetected, rightDetected, stopped, offRoad, whiteDetected, obstacleDetected, intersection, turnDetected};
 robotStatus currentStatus = idle;
-bool followLeft = true;
+const bool followLeft = true;
 bool turning = false;
 bool reversing = false;
 //long modeLockout;
+int i = 0;
+long start = 0;
+long timer = 0;
+bool pulseAllowed = true;
+bool lastPulse[] = {false, false, false, false, false};
 
-String lastSensorDebug = "";
+// segmenten display 
+#define U1 2
+#define U2 4
+#define g 0
+#define f 1
+#define e 8
+#define d 9
+#define c 10
+#define b A1
+#define a A0
+bool segment = true;
+bool finish = true;
+long startTimer = 0;
+bool FI = true;
+bool eindTijdKnipperen = true;
+bool tijdSwitchen = false;
+
+// ultrasonic sensor
+#define echoPin 6
+#define trigPin 7
+long distance = 11;
+
+bool timingAllowed = true;
 
 
 //---Runtime logic---
 void setup() 
 {
-    TCCR2B = TCCR2B & B11111000 | B00000110; // for PWM frequency of 122.55 Hz
-    Serial.begin(9600);
-    pinMode(5, INPUT);
+    // TCCR2B = TCCR2B & B11111000 | B00000110; // for PWM frequency of 122.55 Hz
+    TCCR2B = TCCR2B & B11111000 | B00000111;  // for PWM frequency of 30.64 Hz
 
+    // Serial.begin(115200);
+    pinMode(echoPin, INPUT);
+    pinMode(trigPin, OUTPUT);
 
     //define motor pins
     pinMode(directionPinA, OUTPUT); //Might want to put these in an array and just loop to do this
     pinMode(pwmSpeedPinA, OUTPUT);
-    pinMode(brakePinA, OUTPUT);
 
     pinMode(directionPinB, OUTPUT);
     pinMode(pwmSpeedPinB, OUTPUT);
-    pinMode(brakePinB, OUTPUT);
+    
+    // segmenten display
+    pinMode(U1, OUTPUT);
+    pinMode(U2, OUTPUT);
+    pinMode(g, OUTPUT);
+    pinMode(f, OUTPUT);
+    pinMode(e, OUTPUT);
+    pinMode(d, OUTPUT);
+    pinMode(c, OUTPUT);
+    pinMode(b, OUTPUT);
+    pinMode(a, OUTPUT);
+
+    // begin();
+
+    solving = true;
     
 }
 void loop() {
-    switch (currentStatus)
-    {
-    case idle:
-        Serial.println("STATUS: IDLE");
-        break;
-    default:
-        break;
-    }
-    if(solving)
-    {
-        debugSensorOutput();
-        //translateSensor();
-        ReworkedTranslateSensor();
-        ReworkedNavigate();
-        //Navigate();
+    if(solving){
+        readSensors();
+        solve();
     }
 }
 
-//---Function definitions---
-
-
-
-
-
-
-
-
-
-
-
-
-//Sensors
-void readSensor(){
-    for(int i = 0; i < 5; i++){
-        sensorValues[i] = !digitalRead(sensorPins[i]);
-    }
-}
-/*
-void translateSensor() //Translate SensorValues array to Robot 
+void pulseLineSensor()
 {
-    //modeLockout = millis();
-    if(onStraight && currentStatus != forward && !turning)
+    if(pulseAllowed)
     {
-        SetRobotState(forward);
-    }
-    if(!onCross())
-    {
-            if(onLeft() && currentStatus != leftDetected && !turning)
-            {
-                SetRobotState(leftDetected);
-                turning = true;
-            }
-            else if(onRight() && currentStatus != rightDetected && !turning)
-            {
-                SetRobotState(rightDetected);
-                turning = true;
-            }
-    }
-    else
-    {
-            if(currentStatus != crossingDetected && !turning)
-            {
-                SetRobotState(crossingDetected);
-                turning = true;
-            }
-    }
-    
-    if(onWhite() && currentStatus != stopped && !turning)
-    {
-        SetRobotState(stopped);
-    }
-
-}
-*/
-void ReworkedTranslateSensor() //Just making it again to see if I can do anything differently
-{
-    if(isBoolArrayEqual(sensorValues, straightPath, 5, 5) && !turning)
-    {
-        SetRobotState(forward);
-    } 
-    else if(isBoolArrayEqual(sensorValues, leftTurn, 5, 5) && !turning)
-    {
-        SetRobotState(leftDetected);
-        turning = true;
-    } 
-    else if(isBoolArrayEqual(sensorValues, rightTurn, 5, 5) && !turning)
-    {
-        SetRobotState(rightDetected);
-        turning = true;
-    }
-    else if(isBoolArrayEqual(sensorValues, offRoad, 5, 5) && !turning)
-    {
-        SetRobotState(stopped);
-        //fullStop();
-        //Serial.println("Stop");
-    }
-    else if(isBoolArrayEqual(sensorValues, crossing, 5, 5) && !turning)
-    {
-        // if(followLeft)
-        // {
-        //     turnLeft();
-        // }
-        // else
-        // {
-        //     turnRight();
-        // }
-        fullStop();
-        Serial.println("TESTSTOP");
-    }
-}
-
-void ReworkedNavigate()
-{
-    switch (currentStatus)
-    {
-    case idle:
-        Serial.println("zzzzzz");
-        break;
-    case forward:
-        driveForward();
-        Serial.println("FW");
-        break;
-    case leftDetected:
-        turnLeft();
-        Serial.println("LT");
-        break;
-    case rightDetected:
-        turnRight();
-        Serial.println("RT");
-        break;
-    case stopped:
-        turnAround();
-        Serial.println("STOPPED");
-        break;
-    default:
-        Serial.println("De robot is stukkie wukkie :3");
-        break;
-    }
-}
-
-void debugSensorOutput()
-{
-    readSensor();
-    // for (int i = 0; i < 5; i++) {
-    //     Serial.print(sensorValues[i]);
-    
-    // }
-    // Serial.println();
-}
-
-//Movement
-void fullStop()
-{
-    digitalWrite(pwmSpeedPinA, 0);
-    digitalWrite(pwmSpeedPinB, 0);
-
-    digitalWrite(brakePinA, HIGH);
-    digitalWrite(brakePinB, HIGH);
-
-    turning = false;
-}
-void driveForward(){
-    //Vroem
-    digitalWrite(brakePinA, LOW);
-    digitalWrite(brakePinB, LOW);
-
-    digitalWrite(directionPinA, LOW); //todo: figure out what the directionpin actually does, robot seems to turn right at random while going straight.
-    analogWrite(pwmSpeedPinA, pwmSpeed * pwmCorrectionMod);
-    
-    digitalWrite(directionPinB, HIGH);
-    analogWrite(pwmSpeedPinB, pwmSpeed);
-
-   
-}
-
-void driveBackward()
-{
-    digitalWrite(brakePinA, LOW);
-    digitalWrite(brakePinB, LOW);
-
-    digitalWrite(directionPinA, HIGH);
-    analogWrite(pwmSpeedPinA, pwmSpeed * pwmCorrectionMod);
-    
-    digitalWrite(directionPinB, LOW);
-    analogWrite(pwmSpeedPinB, pwmSpeed);
-}
-void turnAround(){
-    
-    digitalWrite(brakePinA, LOW);
-    digitalWrite(brakePinB, LOW);
-
-    digitalWrite(directionPinA, HIGH);
-    analogWrite(pwmSpeedPinA, pwmSpeed * pwmCorrectionMod);
-    
-    digitalWrite(directionPinB, HIGH);
-    analogWrite(pwmSpeedPinB, pwmSpeed);
-    delay(1000);
-}
-
-//Navigation
-/*
-void Navigate()
-{
-    if(currentStatus != obstacleDetected)
-    {
-        switch (currentStatus)
+        for (int i = 0; i < 5; i++)
         {
-        case idle:
-            Serial.println("I am idle!");
+        lastPulse[i] = !digitalRead(sensorPins[i]);
+        Serial.println(lastPulse[i]);
+        }
+        pulseAllowed = false;
+    }
+}
+
+void solve(){
+    switch(currentStatus){
+        case leftDetected:
+            readSensors();
+            if(equal(sensorValues, leftTurn)){
+                turnLeft();
+                timer = millis();  
+                while(millis() - timer < 750){
+                    readSensors();
+                }
+                while(!(equal(sensorValues, straightPath) || currentStatus == offRoad)){
+                    readSensors();
+                }
+            }
+            break;
+        case obstacleDetected:
+            turnAround();
+            Serial.println("Obstacle detected");
+            timer = millis();
+            while(millis() - timer < 750){
+                readSensors();
+            }
+            while(!(currentStatus != forward || currentStatus != offRoad)){
+                readSensors();
+            }
+        case whiteDetected:
+            driveBackward();
+            while(equal(sensorValues, white)){
+                readSensors();
+            }
+            readSensors();
+            if(currentStatus == forward){
+                turnAround();
+                timer = millis();
+                while(millis() - timer < 1400){
+                    readSensors();
+                }
+                while(!(currentStatus != forward || currentStatus != offRoad)){ // risky :3, might get stuck on driving backwards. Drive back for 3sec, then read sensors, if white >> go forward until line?
+                    readSensors();
+                }
+            }
+            stopMotors();
             break;
         case forward:
-            if(!reversing)
-            {
-                Serial.println("I am going forward!");
+            driveForward();
+            break;
+        case offRoad:
+            if(sensorValues[0] || sensorValues[1] && !sensorValues[2]){
+                offRoadRight();
+            } else if (sensorValues[3] || sensorValues[4] && !sensorValues[2]){
+                offRoadLeft();
+            }
+            break;
+        case turnDetected:
+            bool kruising = false;
+            bool path = false;
+            driveForward();
+            while(!(equal(sensorValues, straightPath) || currentStatus == offRoad || currentStatus == whiteDetected)){// go forward till we find a path, nothing or a crossing
+                readSensors();
+                if(equal(sensorValues, crossing)){
+                    stopMotors();
+                    kruising = true;
+                    break;
+                }
+            }
+            if(kruising){ // if we found a crossing, we need to check for a finish
                 driveForward();
-            }
-            else
-            {
-                Serial.println("I am reversing!");
+                timer = millis();
+                while(millis() - timer < 500){
+                    readSensors();
+                }
+                stopMotors();
+                readSensors();
+                if(equal(sensorValues, crossing)){
+                    solving = false;
+                    nummer(-1);
+                    einde();
+                } else { // else we turn left because we are hugging to the left wall
+                    driveBackward();
+                    timer = millis();
+                    while(millis() - timer < 300){
+                        readSensors();
+                    }
+                    turnLeft();
+                    timer = millis();   
+                    while(millis() - timer < 750){
+                        readSensors();
+                    }
+                    while(!(equal(sensorValues, straightPath) || currentStatus == offRoad)){
+                        readSensors();
+                    }
+                }
+            } else { // if we didn't find a crossing, we need to check if we can go left, if not go forward and if thats not possible go right
                 driveBackward();
-            }
-            break;
-        case leftDetected:
-            Serial.println("Left turn detected!");
-                turn(true);
-            break;
-        case rightDetected:
-            Serial.println("Right turn detected!");
-                turn(false);
-            break;
-        case crossingDetected:
-            Serial.println("Crossing (Or endpoint) detected!");
-            turn(followLeft);
-            break;
-        case stopped:
-            Serial.println("I have stopped!");
-            fullStop();
-            // reversing = true;
-            // driveBackward();
-            //delay(45); //busywait might not be allowed but works for now
-            //fullStop();
-            if(onCross())
-            {
-                //Either at crossing or endpoint
-                //if crossing > turn in followdir
-                //else > stop SolveMaze(); and go idle
+                while(!(sensorValues[0] || sensorValues[4])){ // risky, might get stuck on driving backwards
+                    readSensors();
+                }
+                if(sensorValues[4]){
+                    driveForward();
+                    timer = millis();
+                    while(millis() - timer < 500){
+                        readSensors();
+                    }
+                    if(equal(sensorValues, straightPath) || currentStatus == offRoad){
+                        path = true;
+                    } else {
+                        path = false;
+                    }
+                    driveBackward();
+                    while(!sensorValues[2]){
+                        readSensors();
+                    }
+                    stopMotors();
+                    if(path){
+                        driveForward();
+                        while(!(equal(sensorValues, straightPath) || currentStatus == offRoad)){
+                            readSensors();
+                        }
+                    } else {
+                        turnRight();
+                        timer = millis();
+                        while(millis() - timer < 500){
+                            readSensors();
+                        }
+                        while(!(equal(sensorValues, straightPath) || currentStatus == offRoad)){
+                            readSensors();
+                        }
+                    }
+                } else { // turn left
+                    turnLeft();
+                    if(timingAllowed)
+                    {
+                        timer = millis();
+                        timingAllowed = false;
+                    }
+                    while(millis() - timer < 500){ //delay
+                        readSensors();
+                    }
 
-                //SolveMaze(); //temp
+                    stopMotors(); 
+                    while(!(equal(sensorValues, straightPath) || currentStatus == offRoad)){// turn while there is no straight path or offroad
+                        readSensors();
+                    }
+                    timingAllowed = true;
+                    stopMotors();
+                }
             }
-            else if(isBoolArrayEqual(sensorValues, straightPath, 5, 5))
-            {
-                //Dead end, turn around
-                //SolveMaze(); //temp
-            } 
-            else if (isBoolArrayEqual(sensorValues, offRoad, 5, 5))
-            {
-                turnAround();
-            }
-            
             break;
         default:
-            Serial.println("De robot is stukkie wukkie :3");
-            //fullStop();
+            stopMotors();
             break;
-        }
-    }
-    else
-    {
-        //Navigate around the obstacle
     }
         
 }
-*/
-void SetRobotState(robotStatus newState)
-{
-    //fullStop();
-    currentStatus = newState;
-}
-
-bool WallDetected(bool left)
-{
-    if(left)
-    {
-        if(!sensorValues[0] && !sensorValues[1]) //Linesensor OUT1 and OUT2 return false (White)
-        {
-            return true;
-        }
+//---Function definitions---
+void readSensors(){
+    for (int i = 0; i < 5; i++){
+        sensorValues[i] = !digitalRead(sensorPins[i]);
     }
-    else
-    { 
-        if(!sensorValues[3] && !sensorValues[4]) //Linesensor OUT4 and OUT5 return false (White)
-        {
-            return true;
-        }
+    // tijd();
+    // timer = millis();
+    // if(millis() - timer > 5){
+    //     tijdSwitchen = !tijdSwitchen;
+    // }
+    // if(tijdSwitchen){
+    //     nummer(-1);
+    //     digitalWrite(U1, LOW);
+    //     digitalWrite(U2, HIGH);
+    // } else {
+    //     nummer(-1);
+    //     digitalWrite(U2, LOW);
+    //     digitalWrite(U1, HIGH);
+    // }
+
+
+
+    // // ultrasonic
+    // digitalWrite(trigPin, LOW);
+    // // delayMicroseconds(2);
+    // digitalWrite(trigPin, HIGH);
+    // // delayMicroseconds(10);
+    // digitalWrite(trigPin, LOW);
+    // long duration = pulseIn(echoPin, HIGH);
+    // distance = duration / 29.1 / 2; 
+
+    //Set the robot state based on linesensor input
+    // if(distance > 0 && distance < 15){
+    //     currentStatus = obstacleDetected;
+    // } else 
+    if(equal(sensorValues, straightPath)){
+        currentStatus = forward;
+    } else if(equal(sensorValues, white)){
+        currentStatus = whiteDetected; 
+    } else if((sensorValues[0] && sensorValues[1]) || ((sensorValues[3] && sensorValues[4]))){
+        currentStatus = turnDetected;
+    } 
+    else {
+        currentStatus = offRoad;
     }
 
-    return false;
-}
 
-void SolveMaze() //Call this when at the endpoint to stop the robot
-{
-    SetRobotState(idle);
-    solving = false;
-}
-
-//---Helper functions---
-bool isBoolArrayEqual(bool* a1, bool* a2, int a1Count, int a2Count)
-{
-   if(a1Count != a2Count)
-   {
-    return false; //Arrays cannot be equal if their counts are different.
-   }
-
-   for (int i = 0; i < a2Count; i++)
-   {
-        if(a1[i] != a2[i])
-        {
-            return false; //Return false if a difference is detected.
-        }
-   }
-   
-   return true; //Arrays are the same.
+    
+    
     
 }
-
-void turnRight()
-{
-    while(turning)
+bool equal(bool x[], bool y[]){
+    for(int i = 0; i < 5; i++)
     {
-        digitalWrite(directionPinB, HIGH);  
-        analogWrite(pwmSpeedPinB, pwmSpeed);   
-        analogWrite(pwmSpeedPinA, 0);    
-        debugSensorOutput();
-        if(isBoolArrayEqual(sensorValues, straightPath, 5, 5))
+        if(x[i] != y[i])
         {
-            turning = false;
+            return false;
         }
     }
-
+    return true;
 }
 
-void turnLeft()
-{
-    while(turning)
-    {
-        digitalWrite(directionPinA, LOW);  
-        analogWrite(pwmSpeedPinA, pwmSpeed * pwmCorrectionMod);   
-        analogWrite(pwmSpeedPinB, 0);
-        debugSensorOutput();
-        if(isBoolArrayEqual(sensorValues, straightPath, 5, 5))
-        {
-            turning = false;
-            break;
+// --Drive functions--
+void offRoadRight(){
+    digitalWrite(directionPinA, HIGH);
+    digitalWrite(directionPinB, LOW);
+    analogWrite(pwmSpeedPinA, pwmSpeedA - 25);
+    analogWrite(pwmSpeedPinB, pwmSpeedB + 15);
+}
+void offRoadLeft(){
+    digitalWrite(directionPinA, HIGH);
+    digitalWrite(directionPinB, LOW);
+    analogWrite(pwmSpeedPinA, pwmSpeedA + 15);
+    analogWrite(pwmSpeedPinB, pwmSpeedB - 25);
+}
+void turnRight(){
+    digitalWrite(directionPinA, HIGH);
+    digitalWrite(directionPinB, HIGH);
+    analogWrite(pwmSpeedPinA, subDrivePwmTurnSpeed); //20
+    analogWrite(pwmSpeedPinB, mainDrivePwmTurnSpeed); //60
+}
+void turnLeft(){
+    digitalWrite(directionPinA, LOW);
+    digitalWrite(directionPinB, LOW);
+    analogWrite(pwmSpeedPinA, mainDrivePwmTurnSpeed); //60
+    analogWrite(pwmSpeedPinB, 20); //20
+
+}
+void turnAround(){
+    digitalWrite(directionPinA, HIGH);
+    digitalWrite(directionPinB, HIGH);
+    analogWrite(pwmSpeedPinA, pwmSpeedA);
+    analogWrite(pwmSpeedPinB, pwmSpeedB);
+}
+
+void stopMotors(){
+    analogWrite(pwmSpeedPinA, 0);
+    analogWrite(pwmSpeedPinB, 0);
+}
+
+void driveForward(){
+    digitalWrite(directionPinA, LOW);
+    digitalWrite(directionPinB, HIGH);
+    analogWrite(pwmSpeedPinA, pwmSpeedA - 10);
+    analogWrite(pwmSpeedPinB, pwmSpeedB - 10);
+}
+
+void driveBackward(){
+    digitalWrite(directionPinA, HIGH);
+    digitalWrite(directionPinB, LOW);
+    analogWrite(pwmSpeedPinA, pwmSpeedA - 10);
+    analogWrite(pwmSpeedPinB, pwmSpeedB - 10);
+}
+
+void tijd(){
+    nummer(-1);
+    i = (millis() - startTimer) / 1000;
+    if(i < 10){
+        digitalWrite(U1, LOW);
+        digitalWrite(U2, LOW);
+        digitalWrite(U1, HIGH);
+        nummer(i);
+    } else {
+        segment = !segment;
+        if(segment){
+            digitalWrite(U1, LOW);
+            digitalWrite(U2, HIGH);
+            nummer(i / 10);
+        } else {
+            digitalWrite(U2, LOW);
+            digitalWrite(U1, HIGH);
+            nummer(i % 10);
         }
     }
 }
- 
-void begin() {
+void begin(){
+    digitalWrite(U1, HIGH);
+    for(int i = 1; i < 10; i++){
+        nummer(i);
+        delay(1000);
+        nummer(-1);
+    }
+    digitalWrite(U1, LOW);
+    bool u1 = true;
+    start = millis();
+    while(millis() - start < 1000){
+        if(u1){
+            digitalWrite(U2, HIGH);
+            nummer(1);
+            delay(5);
+            nummer(-1);
+            digitalWrite(U2, LOW);
+            u1 = false;
+        } else {
+            digitalWrite(U1, HIGH);
+            nummer(0);
+            delay(5);
+            nummer(-1);
+            digitalWrite(U1, LOW);
+            u1 = true;
+        }   
+    }
     
+    start = millis();
+    while(millis() - start < 1000){
+        if(u1){
+            digitalWrite(U2, LOW);
+            nummer(-2);
+            delay(5);
+            nummer(-1);
+            digitalWrite(U2, HIGH);
+            u1 = false;
+        } else {
+            digitalWrite(U1, LOW);
+            nummer(5);
+            delay(5);
+            nummer(-1);
+            digitalWrite(U1, HIGH);
+            u1 = true;
+        }   
+    }
+    solving = true;
+    startTimer = millis();
 }
+void einde() { // er wordt een random 8 laten zien in het begin
+    if (finish) {
+        i = (millis() - startTimer) / 1000;
+        for(int x = 0; x <= 2; x++){
+            timer = millis();
+            while(millis() - timer < 1000){ // laatste cijfer laat hij voor 1 miliseconde zien
+                if (segment) {
+                    digitalWrite(U1, LOW);
+                    digitalWrite(U2, HIGH);
+                    nummer(i / 10);
+                    delay(5);
+                    segment = !segment;
+                } else { // deze laat hij nog niet zien of te kort 
+                    digitalWrite(U2, LOW);
+                    digitalWrite(U1, HIGH);
+                    nummer(i % 10);
+                    delay(5);
+                }
+                digitalWrite(U1, LOW);
+                digitalWrite(U2, LOW);
+            }
+            nummer(-1);
+            delay(1000);
+        }
+         
+
+        nummer(-1);
+        
+        while (true) {
+            if(FI){
+                digitalWrite(U1, LOW);
+                nummer(-3);
+                delay(5);
+                nummer(-1);
+                digitalWrite(U1, HIGH);
+                FI = false;
+            } else {
+                digitalWrite(U2, LOW);
+                nummer(1);
+                delay(5);
+                nummer(-1);
+                digitalWrite(U2, HIGH);
+                FI = true;
+                
+            }   
+        }
+    }
+}
+void nummer(int num){
+    if(num == 1){
+        digitalWrite(b, HIGH);
+        digitalWrite(c, HIGH);
+    } else if(num == 2){
+        digitalWrite(a, HIGH);
+        digitalWrite(b, HIGH);
+        digitalWrite(g, HIGH);
+        digitalWrite(e, HIGH);
+        digitalWrite(d, HIGH);
+    } else if(num == 3){
+        digitalWrite(a, HIGH);
+        digitalWrite(b, HIGH);
+        digitalWrite(g, HIGH);
+        digitalWrite(c, HIGH);
+        digitalWrite(d, HIGH);
+    } else if(num == 4){
+        digitalWrite(f, HIGH);
+        digitalWrite(g, HIGH);
+        digitalWrite(b, HIGH);
+        digitalWrite(c, HIGH);
+    } else if(num == 5){
+        digitalWrite(a, HIGH);
+        digitalWrite(f, HIGH);
+        digitalWrite(g, HIGH);
+        digitalWrite(c, HIGH);
+        digitalWrite(d, HIGH);
+    } else if(num == 6){
+        digitalWrite(a, HIGH);
+        digitalWrite(f, HIGH);
+        digitalWrite(g, HIGH);
+        digitalWrite(c, HIGH);
+        digitalWrite(d, HIGH);
+        digitalWrite(e, HIGH);
+    } else if(num == 7){
+        digitalWrite(a, HIGH);
+        digitalWrite(b, HIGH);
+        digitalWrite(c, HIGH);
+    } else if(num == 8){
+        digitalWrite(a, HIGH);
+        digitalWrite(b, HIGH);
+        digitalWrite(c, HIGH);
+        digitalWrite(d, HIGH);
+        digitalWrite(e, HIGH);
+        digitalWrite(f, HIGH);
+        digitalWrite(g, HIGH);
+    } else if(num == 9){
+        digitalWrite(a, HIGH);
+        digitalWrite(f, HIGH);
+        digitalWrite(g, HIGH);
+        digitalWrite(b, HIGH);
+        digitalWrite(c, HIGH);
+        digitalWrite(d, HIGH);
+    } else if(num == 0){
+        digitalWrite(a, HIGH);
+        digitalWrite(b, HIGH);
+        digitalWrite(c, HIGH);
+        digitalWrite(d, HIGH);
+        digitalWrite(e, HIGH);
+        digitalWrite(f, HIGH);
+    } else if (num == -1){ // ledjes uit
+        digitalWrite(g, LOW);
+        digitalWrite(f, LOW);
+        digitalWrite(e, LOW);
+        digitalWrite(d, LOW);
+        digitalWrite(c, LOW);
+        digitalWrite(b, LOW);
+        digitalWrite(a, LOW);
+    } else if (num == -2){ // letter T
+        digitalWrite(f, HIGH);
+        digitalWrite(e, HIGH);
+        digitalWrite(d, HIGH);
+        digitalWrite(g, HIGH);
+    } else if (num == -3) { // cijfer F
+        digitalWrite(f, HIGH);
+        digitalWrite(a, HIGH);
+        digitalWrite(g, HIGH);
+        digitalWrite(e, HIGH);
+    }
+}
+
+
+
