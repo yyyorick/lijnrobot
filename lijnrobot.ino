@@ -1,3 +1,4 @@
+#include <NewPing.h>
 //---Variable definitions---
 //Linesensor
 bool sensorValues[] = {false, false, false, false, false};
@@ -21,7 +22,7 @@ const int pwmSpeedPinA = 3;
 const int directionPinB = 13;
 const int pwmSpeedPinB = 11;
 //A+B
-const int mainDrivePwmTurnSpeed = 70; //60
+const int mainDrivePwmTurnSpeed = 65; //60
 const int subDrivePwmTurnSpeed = 20; //20
 bool directionState;
 
@@ -36,6 +37,7 @@ bool reversing = false;
 int i = 0;
 long start = 0;
 long timer = 0;
+long timer2 = 0;
 bool pulseAllowed = true;
 bool lastPulse[] = {false, false, false, false, false};
 
@@ -62,14 +64,15 @@ bool tijdSwitchen = false;
 long distance = 11;
 
 bool timingAllowed = true;
-
+//Ultrasonic ultrasonic(trigPin, echoPin, 500000);
+NewPing sonar(trigPin, echoPin, 5);
 
 //---Runtime logic---
 void setup() 
 {
     // TCCR2B = TCCR2B & B11111000 | B00000110; // for PWM frequency of 122.55 Hz
     TCCR2B = TCCR2B & B11111000 | B00000111;  // for PWM frequency of 30.64 Hz
-
+    
     // Serial.begin(115200);
     pinMode(echoPin, INPUT);
     pinMode(trigPin, OUTPUT);
@@ -111,7 +114,6 @@ void pulseLineSensor()
         for (int i = 0; i < 5; i++)
         {
         lastPulse[i] = !digitalRead(sensorPins[i]);
-        Serial.println(lastPulse[i]);
         }
         pulseAllowed = false;
     }
@@ -119,29 +121,16 @@ void pulseLineSensor()
 
 void solve(){
     switch(currentStatus){
-        case leftDetected:
-            readSensors();
-            if(equal(sensorValues, leftTurn)){
-                turnLeft();
-                timer = millis();  
-                while(millis() - timer < 750){
-                    readSensors();
-                }
-                while(!(equal(sensorValues, straightPath) || currentStatus == offRoad)){
-                    readSensors();
-                }
-            }
-            break;
         case obstacleDetected:
             turnAround();
-            Serial.println("Obstacle detected");
             timer = millis();
-            while(millis() - timer < 750){
+            while(millis() - timer < 1100){
                 readSensors();
             }
-            while(!(currentStatus != forward || currentStatus != offRoad)){
+            while(!(currentStatus == forward || currentStatus == offRoad)){
                 readSensors();
             }
+            break;      
         case whiteDetected:
             driveBackward();
             while(equal(sensorValues, white)){
@@ -151,10 +140,10 @@ void solve(){
             if(currentStatus == forward){
                 turnAround();
                 timer = millis();
-                while(millis() - timer < 1400){
+                while(millis() - timer < 1200){
                     readSensors();
                 }
-                while(!(currentStatus != forward || currentStatus != offRoad)){ // risky :3, might get stuck on driving backwards. Drive back for 3sec, then read sensors, if white >> go forward until line?
+                while(!(currentStatus == forward || currentStatus == offRoad)){ // risky :3, might get stuck on driving backwards. Drive back for 3sec, then read sensors, if white >> go forward until line?
                     readSensors();
                 }
             }
@@ -197,7 +186,7 @@ void solve(){
                 } else { // else we turn left because we are hugging to the left wall
                     driveBackward();
                     timer = millis();
-                    while(millis() - timer < 300){
+                    while(millis() - timer < 500){
                         readSensors();
                     }
                     turnLeft();
@@ -238,7 +227,7 @@ void solve(){
                     } else {
                         turnRight();
                         timer = millis();
-                        while(millis() - timer < 500){
+                        while(millis() - timer < 700){
                             readSensors();
                         }
                         while(!(equal(sensorValues, straightPath) || currentStatus == offRoad)){
@@ -252,11 +241,9 @@ void solve(){
                         timer = millis();
                         timingAllowed = false;
                     }
-                    while(millis() - timer < 500){ //delay
+                    while(millis() - timer < 700){ //delay
                         readSensors();
-                    }
-
-                    stopMotors(); 
+                    } 
                     while(!(equal(sensorValues, straightPath) || currentStatus == offRoad)){// turn while there is no straight path or offroad
                         readSensors();
                     }
@@ -276,44 +263,19 @@ void readSensors(){
     for (int i = 0; i < 5; i++){
         sensorValues[i] = !digitalRead(sensorPins[i]);
     }
-    // tijd();
-    // timer = millis();
-    // if(millis() - timer > 5){
-    //     tijdSwitchen = !tijdSwitchen;
-    // }
-    // if(tijdSwitchen){
-    //     nummer(-1);
-    //     digitalWrite(U1, LOW);
-    //     digitalWrite(U2, HIGH);
-    // } else {
-    //     nummer(-1);
-    //     digitalWrite(U2, LOW);
-    //     digitalWrite(U1, HIGH);
-    // }
-
-
-
-    // // ultrasonic
-    // digitalWrite(trigPin, LOW);
-    // // delayMicroseconds(2);
-    // digitalWrite(trigPin, HIGH);
-    // // delayMicroseconds(10);
-    // digitalWrite(trigPin, LOW);
-    // long duration = pulseIn(echoPin, HIGH);
-    // distance = duration / 29.1 / 2; 
-
-    //Set the robot state based on linesensor input
-    // if(distance > 0 && distance < 15){
-    //     currentStatus = obstacleDetected;
-    // } else 
-    if(equal(sensorValues, straightPath)){
+    
+    tijd();
+    distance = sonar.ping_cm();
+    
+    if(distance > 0 && distance < 5){
+        currentStatus = obstacleDetected;
+    } else if(equal(sensorValues, straightPath)){ //else
         currentStatus = forward;
     } else if(equal(sensorValues, white)){
         currentStatus = whiteDetected; 
     } else if((sensorValues[0] && sensorValues[1]) || ((sensorValues[3] && sensorValues[4]))){
         currentStatus = turnDetected;
-    } 
-    else {
+    } else {
         currentStatus = offRoad;
     }
 
@@ -386,35 +348,30 @@ void driveBackward(){
 }
 
 void tijd(){
-    nummer(-1);
+    if(millis() - timer2 < 10){
+        tijdSwitchen = !tijdSwitchen;
+        timer2 = millis();
+    }
     i = (millis() - startTimer) / 1000;
-    if(i < 10){
+    if(i >= 100){
+            startTimer = millis();
+    }
+    if(tijdSwitchen){
         digitalWrite(U1, LOW);
+        digitalWrite(U2, HIGH);
+        nummer(i / 10);
+        nummer(-1);
+    } else {
         digitalWrite(U2, LOW);
         digitalWrite(U1, HIGH);
-        nummer(i);
-    } else {
-        segment = !segment;
-        if(segment){
-            digitalWrite(U1, LOW);
-            digitalWrite(U2, HIGH);
-            nummer(i / 10);
-        } else {
-            digitalWrite(U2, LOW);
-            digitalWrite(U1, HIGH);
-            nummer(i % 10);
-        }
+        nummer(i % 10);
+        nummer(-1);
     }
 }
 void begin(){
-    digitalWrite(U1, HIGH);
-    for(int i = 1; i < 10; i++){
-        nummer(i);
-        delay(1000);
-        nummer(-1);
-    }
-    digitalWrite(U1, LOW);
     bool u1 = true;
+    digitalWrite(U1, LOW);
+    digitalWrite(U2, LOW);
     start = millis();
     while(millis() - start < 1000){
         if(u1){
@@ -433,6 +390,13 @@ void begin(){
             u1 = true;
         }   
     }
+        digitalWrite(U1, HIGH);
+        for(int i = 9; i > 0; i--){
+            nummer(i);
+            delay(1000);
+            nummer(-1);
+        }
+
     
     start = millis();
     while(millis() - start < 1000){
@@ -456,6 +420,7 @@ void begin(){
     startTimer = millis();
 }
 void einde() { // er wordt een random 8 laten zien in het begin
+    stopMotors();
     if (finish) {
         i = (millis() - startTimer) / 1000;
         for(int x = 0; x <= 2; x++){
@@ -466,12 +431,15 @@ void einde() { // er wordt een random 8 laten zien in het begin
                     digitalWrite(U2, HIGH);
                     nummer(i / 10);
                     delay(5);
+                    nummer(-1);
                     segment = !segment;
                 } else { // deze laat hij nog niet zien of te kort 
                     digitalWrite(U2, LOW);
                     digitalWrite(U1, HIGH);
                     nummer(i % 10);
                     delay(5);
+                    nummer(-1);
+                    segment = !segment;
                 }
                 digitalWrite(U1, LOW);
                 digitalWrite(U2, LOW);
@@ -479,9 +447,6 @@ void einde() { // er wordt een random 8 laten zien in het begin
             nummer(-1);
             delay(1000);
         }
-         
-
-        nummer(-1);
         
         while (true) {
             if(FI){
@@ -576,7 +541,7 @@ void nummer(int num){
         digitalWrite(e, HIGH);
         digitalWrite(d, HIGH);
         digitalWrite(g, HIGH);
-    } else if (num == -3) { // cijfer F
+    } else if (num == -3) { // letter F
         digitalWrite(f, HIGH);
         digitalWrite(a, HIGH);
         digitalWrite(g, HIGH);
