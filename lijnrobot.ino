@@ -34,7 +34,7 @@ const bool followLeft = true;
 bool turning = false;
 bool reversing = false;
 //long modeLockout;
-int i = 0;
+int miep = 0; //nonsensical name because the original name was 'i' which may have caused issues
 long start = 0;
 long timer = 0;
 long timer2 = 0;
@@ -355,14 +355,14 @@ void tijd(){
         digitalWrite(U2, tijdSwitchen);
         timer2 = millis();
     }
-    i = (millis() - startTimer) / 1000;
-    if(i >= 100){
+    miep = (millis() - startTimer) / 1000;
+    if(miep >= 100){
             startTimer = millis();
     }
     if(tijdSwitchen){
-        nummer(i / 10);
+        nummer(miep / 10);
     } else {
-        nummer(i % 10);
+        nummer(miep % 10);
     }
 }
 void begin(){
@@ -416,24 +416,24 @@ void begin(){
     solving = true;
     startTimer = millis();
 }
-void einde() { // er wordt een random 8 laten zien in het begin
+void einde() {
     stopMotors();
-    if (finish) {
-        i = (millis() - startTimer) / 1000;
-        for(int x = 0; x <= 2; x++){
+    if (finish) { // als hij bij het einde is
+        miep = (millis() - startTimer) / 1000;
+        for(int x = 0; x <= 3; x++){
             timer = millis();
-            while(millis() - timer < 1000){ // laatste cijfer laat hij voor 1 miliseconde zien
-                if (segment) {
+            while(millis() - timer < 1000){ 
+                if (segment) { // laat 10 tallen zien
                     digitalWrite(U1, LOW);
                     digitalWrite(U2, HIGH);
-                    nummer(i / 10);
+                    nummer(miep / 10);
                     delay(5);
                     nummer(-1);
                     segment = !segment;
-                } else { // deze laat hij nog niet zien of te kort 
+                } else { // laat 123456789 zien
                     digitalWrite(U2, LOW);
                     digitalWrite(U1, HIGH);
-                    nummer(i % 10);
+                    nummer(miep % 10);
                     delay(5);
                     nummer(-1);
                     segment = !segment;
