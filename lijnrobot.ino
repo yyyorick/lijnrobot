@@ -14,7 +14,7 @@ const bool white[] = {false, false, false, false, false};
 //Motors
 int pwmSpeedA = 50; //75 appears to be minimum? Kinda need it to be slower though (46 causes steering bugs?)
 int pwmSpeedB = 50; //Dev value: 50
-// const float pwmCorrectionMod = 1.15; // niet meer nodig denk ik
+const float pwmCorrectionMod = 1.10; // niet meer nodig denk ik
 //A - RIGHT
 const int directionPinA = 12;
 const int pwmSpeedPinA = 3;
@@ -336,7 +336,7 @@ void stopMotors(){
 void driveForward(){
     digitalWrite(directionPinA, LOW);
     digitalWrite(directionPinB, HIGH);
-    analogWrite(pwmSpeedPinA, pwmSpeedA - 10);
+    analogWrite(pwmSpeedPinA, pwmSpeedA);
     analogWrite(pwmSpeedPinB, pwmSpeedB - 10);
 }
 
@@ -445,15 +445,15 @@ void einde() {
             delay(1000);
         }
         
-        while (true) {
-            if(FI){
+        while (true) { // laat FI zien
+            if(FI){ // F
                 digitalWrite(U1, LOW);
                 nummer(-3);
                 delay(5);
                 nummer(-1);
                 digitalWrite(U1, HIGH);
                 FI = false;
-            } else {
+            } else { // I
                 digitalWrite(U2, LOW);
                 nummer(1);
                 delay(5);
