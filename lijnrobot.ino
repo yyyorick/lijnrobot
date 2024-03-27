@@ -64,7 +64,7 @@ bool tijdSwitchen = false;
 long distance = 11;
 
 bool timingAllowed = true;
-//Ultrasonic ultrasonic(trigPin, echoPin, 500000);
+
 NewPing sonar(trigPin, echoPin, 5);
 
 //---Runtime logic---
@@ -78,7 +78,7 @@ void setup()
     pinMode(trigPin, OUTPUT);
 
     //define motor pins
-    pinMode(directionPinA, OUTPUT); //Might want to put these in an array and just loop to do this
+    pinMode(directionPinA, OUTPUT); 
     pinMode(pwmSpeedPinA, OUTPUT);
 
     pinMode(directionPinB, OUTPUT);
@@ -95,7 +95,7 @@ void setup()
     pinMode(b, OUTPUT);
     pinMode(a, OUTPUT);
 
-    // begin();
+    begin();
 
     solving = true;
     
@@ -133,11 +133,11 @@ void solve(){
             break;      
         case whiteDetected:
             driveBackward();
-            while(equal(sensorValues, white)){
+            while(equal(sensorValues, white)){ // search for the line
                 readSensors();
             }
             readSensors();
-            if(currentStatus == forward){
+            if(currentStatus == forward){ // line found and turn around
                 turnAround();
                 timer = millis();
                 while(millis() - timer < 1200){
@@ -348,8 +348,11 @@ void driveBackward(){
 }
 
 void tijd(){
-    if(millis() - timer2 < 10){
+    if(millis() - timer2 > 5){
+        nummer(-1);
         tijdSwitchen = !tijdSwitchen;
+        digitalWrite(U1, !tijdSwitchen);
+        digitalWrite(U2, tijdSwitchen);
         timer2 = millis();
     }
     i = (millis() - startTimer) / 1000;
@@ -357,15 +360,9 @@ void tijd(){
             startTimer = millis();
     }
     if(tijdSwitchen){
-        digitalWrite(U1, LOW);
-        digitalWrite(U2, HIGH);
         nummer(i / 10);
-        nummer(-1);
     } else {
-        digitalWrite(U2, LOW);
-        digitalWrite(U1, HIGH);
         nummer(i % 10);
-        nummer(-1);
     }
 }
 void begin(){
